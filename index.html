@@ -3,20 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Multi-Model Chat</title>
+  <title>Multi-Model AI Chat</title>
   <link rel="stylesheet" href="main.css">
   <script src="main.js"></script>
 </head>
 <body>
   <div class="chat-container">
     <div class="chat-header">
-      <h1>🤖 AI Chat</h1>
-      <p>Choose your favorite model below</p>
+      <h1>🤖 Multi-Model Chat</h1>
+      <p>Select a model and start chatting!</p>
     </div>
 
-    <!-- ✅ قائمة النماذج -->
     <div class="model-selector">
-      <label for="modelSelect">Model:</label>
+      <label for="modelSelect">Choose a Model:</label>
       <select id="modelSelect">
         <optgroup label="GPT Models">
           <option value="gpt-4o-mini">gpt-4o-mini</option>
@@ -54,15 +53,13 @@
       </select>
     </div>
 
-    <!-- رسائل الدردشة -->
     <div class="chat-messages" id="chatMessages">
       <div class="empty-state">
         <div class="empty-state-icon">💬</div>
-        <p>Start chatting with the model of your choice!</p>
+        <p>Start chatting with your selected model!</p>
       </div>
     </div>
 
-    <!-- إدخال الرسالة -->
     <div class="input-container">
       <div class="input-wrapper">
         <input type="text" id="userInput" placeholder="Ask anything...">
@@ -135,7 +132,13 @@
           max_tokens: 1000
         });
 
-        // استخراج الرد بطريقة ذكية
+        // النموذج اللي تم استخدامه فعليًا
+        const usedModel = response?.model || model;
+
+        // أضف رسالة توضح الموديل اللي تم استخدامه
+        addMessage(`🤖 Model Used: ${usedModel}`, false);
+
+        // استخراج الرد الذكي
         const result =
           response?.message?.content?.[0]?.text ||
           response?.message?.content ||
@@ -154,7 +157,6 @@
       }
     }
 
-    // إدخال Enter
     document.getElementById('userInput').addEventListener('keyup', function(e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
