@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Multi-Model AI Chat</title>
   <link rel="stylesheet" href="main.css">
-  <script src="https://js.puter.com/v2/"></script>
+  <!-- Load Puter SDK with error handling -->
+  <script src="https://js.puter.com/v2/" onerror="window.puterLoadFailed=true"></script>
 </head>
 <body>
   <div class="chat-container">
@@ -23,32 +24,10 @@
           <option value="gpt-4.1">gpt-4.1</option>
           <option value="gpt-4.1-mini">gpt-4.1-mini</option>
           <option value="gpt-4.1-nano" selected>gpt-4.1-nano (default)</option>
-          <option value="gpt-4.5-preview">gpt-4.5-preview</option>
-          <option value="o1">o1</option>
-          <option value="o1-mini">o1-mini</option>
-          <option value="o1-pro">o1-pro</option>
-          <option value="o3">o3</option>
-          <option value="o3-mini">o3-mini</option>
-          <option value="o4-mini">o4-mini</option>
         </optgroup>
         <optgroup label="Claude">
           <option value="claude-sonnet-4">claude-sonnet-4</option>
           <option value="claude-opus-4">claude-opus-4</option>
-          <option value="claude-3-7-sonnet">claude-3-7-sonnet</option>
-          <option value="claude-3-5-sonnet">claude-3-5-sonnet</option>
-        </optgroup>
-        <optgroup label="Open Source / Others">
-          <option value="deepseek-chat">deepseek-chat</option>
-          <option value="deepseek-reasoner">deepseek-reasoner</option>
-          <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-          <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-          <option value="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo">LLaMA 8B</option>
-          <option value="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo">LLaMA 70B</option>
-          <option value="meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo">LLaMA 405B</option>
-          <option value="mistral-large-latest">mistral-large-latest</option>
-          <option value="pixtral-large-latest">pixtral-large-latest</option>
-          <option value="codestral-latest">codestral-latest</option>
-          <option value="google/gemma-2-27b-it">gemma-2-27b-it</option>
         </optgroup>
       </select>
     </div>
@@ -72,9 +51,32 @@
   </div>
 
   <script>
+    // State management
     let isLoading = false;
     let messageHistory = [];
+    let puterAvailable = false;
+    let fallbackMode = false;
 
+    // Initialize the application
+    function init() {
+      checkPuterAvailability();
+      setupEventListeners();
+      document.getElementById('userInput').focus();
+    }
+
+    // Check if Puter AI is available
+    function checkPuterAvailability() {
+      if (window.puterLoadFailed || typeof puter === 'undefined' || !puter.ai) {
+        showError("Puter AI service is not available. Using fallback mode.");
+        puterAvailable = false;
+        fallbackMode = true;
+        return false;
+      }
+      puterAvailable = true;
+      return true;
+    }
+
+    // Add a message to the chat
     function addMessage(content, isUser = false) {
       const messagesContainer = document.getElementById('chatMessages');
       const emptyState = messagesContainer.querySelector('.empty-state');
@@ -93,6 +95,7 @@
       messageHistory.push({ content, isUser, timestamp: now });
     }
 
+    // Show error message
     function showError(message) {
       const messagesContainer = document.getElementById('chatMessages');
       const errorDiv = document.createElement('div');
@@ -102,29 +105,34 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
+    // Set loading state
     function setLoading(loading) {
       isLoading = loading;
       const sendBtn = document.getElementById('sendBtn');
       const btnText = sendBtn.querySelector('.btn-text');
       const loadingSpinner = sendBtn.querySelector('.loading');
       const userInput = document.getElementById('userInput');
+      
       sendBtn.disabled = loading;
       btnText.style.display = loading ? 'none' : 'block';
       loadingSpinner.style.display = loading ? 'block' : 'none';
       userInput.disabled = loading;
     }
 
-    function checkPuterAvailable() {
-      if (typeof puter === 'undefined' || !puter.ai || !puter.ai.chat) {
-        showError("Error: Puter AI service is not available. Please ensure you're connected to the internet and try again.");
-        return false;
-      }
-      return true;
+    // Fallback response generator
+    function generateFallbackResponse(userMessage) {
+      const responses = [
+        "I'm currently in fallback mode. Normally I would respond to: " + userMessage,
+        "The AI service is unavailable. You asked: " + userMessage,
+        "Demo response for: " + userMessage,
+        "I can't access the AI right now, but you said: " + userMessage
+      ];
+      return responses[Math.floor(Math.random() * responses.length)];
     }
 
+    // Main message sending function
     async function sendMessage() {
       const userInput = document.getElementById('userInput');
-      const model = document.getElementById('modelSelect').value;
       const message = userInput.value.trim();
       if (!message || isLoading) return;
 
@@ -133,82 +141,85 @@
       setLoading(true);
 
       try {
-        // Check if Puter AI is available
-        if (!checkPuterAvailable()) {
-          setLoading(false);
+        if (fallbackMode || !puterAvailable) {
+          // Fallback mode
+          setTimeout(() => {
+            addMessage(generateFallbackResponse(message), false);
+            setLoading(false);
+          }, 800);
           return;
         }
 
+        const model = document.getElementById('modelSelect').value;
         const response = await puter.ai.chat(message, {
           model: model,
           max_tokens: 1000
+        }).catch(error => {
+          if (error?.error?.message?.includes('usage-limited-chat')) {
+            throw new Error("API usage limit reached. Using fallback mode.");
+          }
+          throw error;
         });
 
-        if (!response) {
-          throw new Error("No response received from the AI service");
+        if (!response || response.success === false) {
+          throw new Error(response?.error?.message || "Service unavailable");
         }
 
         // Display the model used
         const usedModel = response?.model || model;
         addMessage(`🤖 Model Used: ${usedModel}`, false);
 
-        // Extract the AI response
-        const result =
-          response?.message?.content?.[0]?.text ||
-          response?.message?.content ||
-          response?.message?.text ||
-          response?.message ||
-          response?.content ||
-          "⚠️ No response content received.";
-
+        // Extract and display the response
+        const result = extractAIResponse(response);
         addMessage(result, false);
 
       } catch (error) {
-        console.error('Error sending message:', error);
-        showError("Error: " + (error.message || "Failed to communicate with AI service"));
+        console.error('Chat Error:', error);
+        showError("Error: " + (error.message || "Service unavailable"));
+        
+        // Switch to fallback mode after first error
+        if (!fallbackMode) {
+          fallbackMode = true;
+          setTimeout(() => {
+            addMessage("Switching to fallback mode...", false);
+            addMessage(generateFallbackResponse(message), false);
+          }, 1000);
+        }
       } finally {
         setLoading(false);
         userInput.focus();
       }
     }
 
-    // Initialize Puter SDK
-    function initializePuter() {
-      if (typeof puter === 'undefined') {
-        showError("Warning: Puter SDK is loading... please wait");
-        // Try to reload the SDK
-        const script = document.createElement('script');
-        script.src = 'https://js.puter.com/v2/';
-        script.onload = () => {
-          if (typeof puter !== 'undefined') {
-            const messagesContainer = document.getElementById('chatMessages');
-            const errorMessages = messagesContainer.querySelectorAll('.error-message');
-            errorMessages.forEach(msg => {
-              if (msg.textContent.includes("Puter SDK")) msg.remove();
-            });
-          }
-        };
-        document.head.appendChild(script);
-      }
+    // Extract AI response from different possible structures
+    function extractAIResponse(response) {
+      return (
+        response?.message?.content?.[0]?.text ||
+        response?.message?.content ||
+        response?.message?.text ||
+        response?.message ||
+        response?.content ||
+        "⚠️ No response content received."
+      );
     }
 
-    // Event listeners
-    document.getElementById('userInput').addEventListener('keyup', function(e) {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
+    // Set up event listeners
+    function setupEventListeners() {
+      document.getElementById('userInput').addEventListener('keyup', function(e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
 
-    window.addEventListener('load', function() {
-      initializePuter();
-      document.getElementById('userInput').focus();
-    });
+      document.getElementById('userInput').addEventListener('input', function() {
+        this.style.height = 'auto';
+        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+      });
+    }
 
-    document.getElementById('userInput').addEventListener('input', function() {
-      this.style.height = 'auto';
-      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-    });
+    // Initialize when window loads
+    window.addEventListener('load', init);
   </script>
 </body>
 </html>
