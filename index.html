@@ -3,45 +3,30 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Multi-Model AI Chat</title>
+  <title>Local AI Chat Demo</title>
   <link rel="stylesheet" href="main.css">
-  <!-- Load Puter SDK with error handling -->
-  <script src="https://js.puter.com/v2/" onerror="window.puterLoadFailed=true"></script>
 </head>
 <body>
   <div class="chat-container">
     <div class="chat-header">
-      <h1>🤖 Multi-Model Chat</h1>
-      <p>Select a model and start chatting!</p>
+      <h1>🤖 Local Chat Demo</h1>
+      <p>This is a local demo without external API calls</p>
     </div>
 
-    <div class="model-selector">
-      <label for="modelSelect">Choose a Model:</label>
-      <select id="modelSelect">
-        <optgroup label="GPT Models">
-          <option value="gpt-4o-mini">gpt-4o-mini</option>
-          <option value="gpt-4o">gpt-4o</option>
-          <option value="gpt-4.1">gpt-4.1</option>
-          <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-          <option value="gpt-4.1-nano" selected>gpt-4.1-nano (default)</option>
-        </optgroup>
-        <optgroup label="Claude">
-          <option value="claude-sonnet-4">claude-sonnet-4</option>
-          <option value="claude-opus-4">claude-opus-4</option>
-        </optgroup>
-      </select>
+    <div class="model-selector" style="display:none">
+      <!-- Hidden since we're not using model selection -->
     </div>
 
     <div class="chat-messages" id="chatMessages">
       <div class="empty-state">
         <div class="empty-state-icon">💬</div>
-        <p>Start chatting with your selected model!</p>
+        <p>Start chatting with the demo bot!</p>
       </div>
     </div>
 
     <div class="input-container">
       <div class="input-wrapper">
-        <input type="text" id="userInput" placeholder="Ask anything...">
+        <input type="text" id="userInput" placeholder="Type a message...">
       </div>
       <button id="sendBtn" onclick="sendMessage()">
         <span class="btn-text">Send</span>
@@ -51,32 +36,21 @@
   </div>
 
   <script>
-    // State management
     let isLoading = false;
     let messageHistory = [];
-    let puterAvailable = false;
-    let fallbackMode = false;
 
-    // Initialize the application
-    function init() {
-      checkPuterAvailability();
-      setupEventListeners();
-      document.getElementById('userInput').focus();
-    }
+    // Simple response patterns
+    const responsePatterns = [
+      "I'm a demo bot. You said: {input}",
+      "Thanks for your message: {input}",
+      "In a real app, I would respond to: {input}",
+      "Demo response to: {input}",
+      "Interesting point about: {input}",
+      "Let me think about: {input}",
+      "{input} - that's a great topic!",
+      "I'd love to discuss: {input}"
+    ];
 
-    // Check if Puter AI is available
-    function checkPuterAvailability() {
-      if (window.puterLoadFailed || typeof puter === 'undefined' || !puter.ai) {
-        showError("Puter AI service is not available. Using fallback mode.");
-        puterAvailable = false;
-        fallbackMode = true;
-        return false;
-      }
-      puterAvailable = true;
-      return true;
-    }
-
-    // Add a message to the chat
     function addMessage(content, isUser = false) {
       const messagesContainer = document.getElementById('chatMessages');
       const emptyState = messagesContainer.querySelector('.empty-state');
@@ -95,17 +69,6 @@
       messageHistory.push({ content, isUser, timestamp: now });
     }
 
-    // Show error message
-    function showError(message) {
-      const messagesContainer = document.getElementById('chatMessages');
-      const errorDiv = document.createElement('div');
-      errorDiv.className = 'error-message';
-      errorDiv.textContent = message;
-      messagesContainer.appendChild(errorDiv);
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    // Set loading state
     function setLoading(loading) {
       isLoading = loading;
       const sendBtn = document.getElementById('sendBtn');
@@ -119,19 +82,13 @@
       userInput.disabled = loading;
     }
 
-    // Fallback response generator
-    function generateFallbackResponse(userMessage) {
-      const responses = [
-        "I'm currently in fallback mode. Normally I would respond to: " + userMessage,
-        "The AI service is unavailable. You asked: " + userMessage,
-        "Demo response for: " + userMessage,
-        "I can't access the AI right now, but you said: " + userMessage
-      ];
-      return responses[Math.floor(Math.random() * responses.length)];
+    function generateResponse(input) {
+      // Simple echo with variation
+      const randomPattern = responsePatterns[Math.floor(Math.random() * responsePatterns.length)];
+      return randomPattern.replace('{input}', input);
     }
 
-    // Main message sending function
-    async function sendMessage() {
+    function sendMessage() {
       const userInput = document.getElementById('userInput');
       const message = userInput.value.trim();
       if (!message || isLoading) return;
@@ -140,86 +97,30 @@
       userInput.value = '';
       setLoading(true);
 
-      try {
-        if (fallbackMode || !puterAvailable) {
-          // Fallback mode
-          setTimeout(() => {
-            addMessage(generateFallbackResponse(message), false);
-            setLoading(false);
-          }, 800);
-          return;
-        }
-
-        const model = document.getElementById('modelSelect').value;
-        const response = await puter.ai.chat(message, {
-          model: model,
-          max_tokens: 1000
-        }).catch(error => {
-          if (error?.error?.message?.includes('usage-limited-chat')) {
-            throw new Error("API usage limit reached. Using fallback mode.");
-          }
-          throw error;
-        });
-
-        if (!response || response.success === false) {
-          throw new Error(response?.error?.message || "Service unavailable");
-        }
-
-        // Display the model used
-        const usedModel = response?.model || model;
-        addMessage(`🤖 Model Used: ${usedModel}`, false);
-
-        // Extract and display the response
-        const result = extractAIResponse(response);
-        addMessage(result, false);
-
-      } catch (error) {
-        console.error('Chat Error:', error);
-        showError("Error: " + (error.message || "Service unavailable"));
-        
-        // Switch to fallback mode after first error
-        if (!fallbackMode) {
-          fallbackMode = true;
-          setTimeout(() => {
-            addMessage("Switching to fallback mode...", false);
-            addMessage(generateFallbackResponse(message), false);
-          }, 1000);
-        }
-      } finally {
+      // Simulate AI processing delay
+      setTimeout(() => {
+        const response = generateResponse(message);
+        addMessage(response, false);
         setLoading(false);
-        userInput.focus();
+      }, 500 + Math.random() * 1000); // Random delay between 0.5-1.5s
+    }
+
+    // Event listeners
+    document.getElementById('userInput').addEventListener('keyup', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
       }
-    }
+    });
 
-    // Extract AI response from different possible structures
-    function extractAIResponse(response) {
-      return (
-        response?.message?.content?.[0]?.text ||
-        response?.message?.content ||
-        response?.message?.text ||
-        response?.message ||
-        response?.content ||
-        "⚠️ No response content received."
-      );
-    }
+    document.getElementById('userInput').addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
 
-    // Set up event listeners
-    function setupEventListeners() {
-      document.getElementById('userInput').addEventListener('keyup', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
-        }
-      });
-
-      document.getElementById('userInput').addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-      });
-    }
-
-    // Initialize when window loads
-    window.addEventListener('load', init);
+    window.addEventListener('load', function() {
+      document.getElementById('userInput').focus();
+    });
   </script>
 </body>
 </html>
