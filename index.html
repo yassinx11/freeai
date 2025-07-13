@@ -114,6 +114,14 @@
       userInput.disabled = loading;
     }
 
+    function checkPuterAvailable() {
+      if (typeof puter === 'undefined' || !puter.ai || !puter.ai.chat) {
+        showError("Error: Puter AI service is not available. Please ensure you're connected to the internet and try again.");
+        return false;
+      }
+      return true;
+    }
+
     async function sendMessage() {
       const userInput = document.getElementById('userInput');
       const model = document.getElementById('modelSelect').value;
@@ -125,38 +133,66 @@
       setLoading(true);
 
       try {
-        if (typeof puter === 'undefined') throw new Error('Puter AI is not available.');
+        // Check if Puter AI is available
+        if (!checkPuterAvailable()) {
+          setLoading(false);
+          return;
+        }
 
         const response = await puter.ai.chat(message, {
           model: model,
           max_tokens: 1000
         });
 
-        // النموذج اللي تم استخدامه فعليًا
-        const usedModel = response?.model || model;
+        if (!response) {
+          throw new Error("No response received from the AI service");
+        }
 
-        // أضف رسالة توضح الموديل اللي تم استخدامه
+        // Display the model used
+        const usedModel = response?.model || model;
         addMessage(`🤖 Model Used: ${usedModel}`, false);
 
-        // استخراج الرد الذكي
+        // Extract the AI response
         const result =
           response?.message?.content?.[0]?.text ||
           response?.message?.content ||
           response?.message?.text ||
           response?.message ||
-          "⚠️ No response received.";
+          response?.content ||
+          "⚠️ No response content received.";
 
         addMessage(result, false);
 
       } catch (error) {
         console.error('Error sending message:', error);
-        showError("Error: " + error.message);
+        showError("Error: " + (error.message || "Failed to communicate with AI service"));
       } finally {
         setLoading(false);
         userInput.focus();
       }
     }
 
+    // Initialize Puter SDK
+    function initializePuter() {
+      if (typeof puter === 'undefined') {
+        showError("Warning: Puter SDK is loading... please wait");
+        // Try to reload the SDK
+        const script = document.createElement('script');
+        script.src = 'https://js.puter.com/v2/';
+        script.onload = () => {
+          if (typeof puter !== 'undefined') {
+            const messagesContainer = document.getElementById('chatMessages');
+            const errorMessages = messagesContainer.querySelectorAll('.error-message');
+            errorMessages.forEach(msg => {
+              if (msg.textContent.includes("Puter SDK")) msg.remove();
+            });
+          }
+        };
+        document.head.appendChild(script);
+      }
+    }
+
+    // Event listeners
     document.getElementById('userInput').addEventListener('keyup', function(e) {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -165,6 +201,7 @@
     });
 
     window.addEventListener('load', function() {
+      initializePuter();
       document.getElementById('userInput').focus();
     });
 
